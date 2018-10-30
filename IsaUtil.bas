@@ -1,5 +1,4 @@
 #Compile SLL "..\bin\saUtil.sll"
-#Include Once "Win32Api.inc"
 '------------------------------------------------------------------------------
 'Purpose  : General purpose helper routines
 '
@@ -27,6 +26,12 @@
 %famReadWriteShared = 5
 %famReadWriteExclusive = 6
 '------------------------------------------------------------------------------
+'*** Declares ***
+'------------------------------------------------------------------------------
+#Include Once "Windows.inc"
+#Include Once "Win32Api.inc"
+#Include Once "ImageHlp.inc"
+'------------------------------------------------------------------------------
 '*** Enumeration/TYPEs ***
 '------------------------------------------------------------------------------
 Union PBFileTime
@@ -38,10 +43,6 @@ Union PBSystemTime
    ST As FILETIME
    q As Quad
 End Union
-'------------------------------------------------------------------------------
-'*** Declares ***
-'------------------------------------------------------------------------------
-#Include Once "Windows.inc"
 '------------------------------------------------------------------------------
 '*** Variables ***
 '------------------------------------------------------------------------------
@@ -1192,9 +1193,9 @@ Function RenameFileExt(ByVal sFullFileName As String, Optional ByVal vntFileExtC
 End Function
 '==============================================================================
 
-Function FormatNumber(ByVal xNumber As Ext) As String
+Function FormatNumber(ByVal xNumber As Ext) Common As String
 '------------------------------------------------------------------------------
-'Purpose  : Formats a number with proper user locale settings
+'Purpose  : Formats a number with proper user locale settings (Win32 API GetNumberFormat)
 '
 'Prereq.  : -
 'Parameter: xNumber  - number to format
@@ -1217,13 +1218,15 @@ Function FormatNumber(ByVal xNumber As Ext) As String
 End Function
 '==============================================================================
 
-Function FormatNumberEx(ByVal xNumber As Ext, Optional lOmitDecimals As Long) As String
+Function FormatNumberEx(ByVal xNumber As Ext, Optional ByVal lOmitDecimals As Long) Common As String
 '------------------------------------------------------------------------------
-'Purpose  : Format a number according to the current user's local
+'Purpose  : Format a number according to the current user's locale (Win32 API GetNumberFormatEx)
 '
 'Prereq.  : -
 'Parameter: -
-'Returns  : xNumber  - Number to format
+'Returns  : xNumber        - Number to format
+'           lOmitDecimals  - If True, returns the integer part of the number only (truncates
+'                            decimals and separator)
 'Note     : -
 '
 '   Author: Knuth Konrad, 25.10.2018
@@ -1234,52 +1237,46 @@ Function FormatNumberEx(ByVal xNumber As Ext, Optional lOmitDecimals As Long) As
    Local lpzOutputValue As WStringZ * 80  'additional room provided for commas, etc.
    Local lRet As Long
 
-   lpzInputValue = LTrim$(Str$(xNumber, 18))
+   lpzInputValue = LTrim$(Str$(xNumber, 36))
 
-'   stdout "lpzInputValue: " & lpzInputValue
-'   lRet = GetNumberFormatEx(byval %LOCALE_NAME_USER_DEFAULT, ByVal 0, lpzInputValue, ByVal 0, lpzOutputValue, sizeof(lpzOutputValue))
-'   StdOut "GetNumberFormatEx: " & Format$(lRet)
-'   stdout "lpzOutputValue: " & lpzOutputValue
-'   StdOut "Left$(lpzOutputValue, lRet): " & left$(lpzOutputValue, lRet)
-'
-'   local i as long
-'   for i = 1 to lRet
-'      stdout format$(asc(lpzOutputValue, i)) & " ";
-'   next
+   If IsTrue(GetNumberFormatEx(ByVal %LOCALE_NAME_USER_DEFAULT, ByVal 0, lpzInputValue, ByVal 0, lpzOutputValue, SizeOf(lpzOutputValue))) Then
 
-   Call GetNumberFormatEx(ByVal %LOCALE_NAME_USER_DEFAULT, ByVal 0, lpzInputValue, ByVal 0, lpzOutputValue, SizeOf(lpzOutputValue))
+      If IsTrue(lOmitDecimals) Then
+         ' Drop the decimals and decimal separator
+         Local szDecimal As AsciiZ * 2
+         Local lRetVal As Long
 
-   If IsTrue(lOmitDecimals) Then
-      ' Drop the decimals and decimal separator
-      Local szDecimal As AsciiZ * 2
-      Local lRetVal As Long
+         lRetVal = GetLocaleInfo(%LOCALE_USER_DEFAULT, %LOCALE_SDECIMAL, szDecimal, SizeOf(szDecimal))
+         Function = Extract$(lpzOutputValue, szDecimal)
 
-      lRetVal = GetLocaleInfo(%LOCALE_SYSTEM_DEFAULT, %LOCALE_SDECIMAL, szDecimal, SizeOf(szDecimal))
-      Function = Extract$(lpzOutputValue, szDecimal)
+      Else
+
+         Function = lpzOutputValue
+
+      End If
 
    Else
-
-      Function = lpzOutputValue
+      Function = ""
 
    End If
 
 End Function
 '==============================================================================
 
-Function FormatLoc(ByVal fextValue As Ext, ByVal sMask As String) As String
+Function FormatLoc(ByVal fextValue As Ext, ByVal sMask As String) Common As String
 '------------------------------------------------------------------------------
-'Does     : Format a number and taking Locale settings for decimal and
+'Purpose  : Format a number and taking Locale settings for decimal and
 '           thousander separator into account
 '
-'Called From: -
-'Requires : -
+'Prereq.  : -
 'Parameter: -
-'Returns  : Formatted String
+'Returns  : fextValue   - Number to format
+'           sMask       - Custom format mask
 'Note     : -
 '
-'   Author: Knuth Konrad
-'  created: 18.07.2001
-'  changed: -
+'   Author: Knuth Konrad, 25.10.2018
+'   Source: -
+'  Changed: -
 '------------------------------------------------------------------------------
    Local szThousand As AsciiZ * 2
    Local szDecimal As AsciiZ * 2
@@ -1300,29 +1297,63 @@ Function FormatLoc(ByVal fextValue As Ext, ByVal sMask As String) As String
    End If
 
 End Function
-'----------------------------------------------------------------------------
+'==============================================================================
 
-Function DateNowLocal() As String
-
-   Local lRetval As Long, udtST As SYSTEMTIME
+Function DateNowLocal(Optional ByVal lLocale As Long, Optional ByVal lDateFormat As Long) _
+   Common As String
+'------------------------------------------------------------------------------
+'Purpose  : Return the current date as a formatted string
+'
+'Prereq.  : -
+'Parameter: lLocale     - Locale to use (default = LOCALE_SYSTEM_LOCALE)
+'           lDateFormat - Date format to use (default = DATE_LONGDATE)
+'Returns  : Formatted date string
+'Note     : -
+'
+'   Author: Knuth Konrad, 25.10.2018
+'   Source: -
+'  Changed: -
+'------------------------------------------------------------------------------
+   Local lRetval As Long
+   Local udtST As SYSTEMTIME
    Local szDate As AsciiZ * %Max_Path
+
+   ' Set default values, if necessary
+   If lLocale = 0 Then
+      lLocale = %LOCALE_SYSTEM_DEFAULT
+   End If
+
+   If lDateFormat = 0 Then
+      lDateFormat = %DATE_LONGDATE
+   End If
 
    GetLocalTime udtST
 
    szDate = ""
-   lRetval = GetDateFormat(%LOCALE_SYSTEM_DEFAULT, _
-      %DATE_LONGDATE, _
+   lRetval = GetDateFormat(lLocale, _
+      lDateFormat, _
       udtST, _
       "", _
       szDate, _
       SizeOf(szDate))
-   DateNowLocal = Left$(szDate, lRetval)
+   Function = Left$(szDate, lRetval)
 
 End Function
 '===========================================================================
 
-Function TimeNowLocal() As String
-
+Function TimeNowLocal(Optional ByVal lLocale As Long) Common As String
+'------------------------------------------------------------------------------
+'Purpose  : Return the current time as a formatted string
+'
+'Prereq.  : -
+'Parameter: lLocale     - Locale to use (default = LOCALE_SYSTEM_LOCALE)
+'Returns  : Formatted time string
+'Note     : -
+'
+'   Author: Knuth Konrad, 25.10.2018
+'   Source: -
+'  Changed: -
+'------------------------------------------------------------------------------
    Local lRetval As Long, udtST As SYSTEMTIME
    Local szTime As AsciiZ * %Max_Path
 
@@ -1340,165 +1371,133 @@ Function TimeNowLocal() As String
 End Function
 '===========================================================================
 
-Function CreateDir(ByVal sDir As String) As Long
+Function CreateNestedDirs(ByVal sPath As String) Common As Long
+'------------------------------------------------------------------------------
+'Purpose  : Creates a folder structure, making sure every folder passed in sPath
+'           does exist/is created
+'
+'Prereq.  : -
+'Parameter: sPath - Folder structure to create
+'Returns  : Result of MakeSureDirectoryPathExists
+'Note     : sPath may both be an absolute path, e.g. C:\MyData\1 or
+'           a relative path, e.g. .\MyData\1
+'
+'   Author: Knuth Konrad, 28.03.2006
+'   Source: -
+'  Changed: -
+'------------------------------------------------------------------------------
+   sPath = NormalizePath(sPath)
 
-   On Error Resume Next
-
-   Local sPath As String, sLabel As String
-
-   sLabel = sDir
-   sPath = Left$(sLabel, 3)
-   sLabel = Right$(sLabel, Len(sLabel) - 3)
-   If Right$(sLabel, 1) <> "\" Then sLabel = sLabel & "\"
-   sPath = sPath & Mid$(sLabel, 1, InStr(sLabel, "\") - 1)
-   sLabel = Right$(sLabel, Len(sLabel) - InStr(sLabel, "\"))
-
-   While Right$(sPath, 1) <> "\"
-      MkDir sPath
-      If sLabel <> "" Then
-         sPath = sPath & "\" & Mid$(sLabel, 1, InStr(sLabel, "\") - 1)
-      Else
-         sPath = sPath & "\"
-      End If
-      sLabel = Right$(sLabel, Len(sLabel) - InStr(sLabel, "\"))
-   Wend
+   Function = MakeSureDirectoryPathExists(ByCopy sPath)
 
 End Function
-'===========================================================================
-'
-'Function AppendStr2( ByVal stPos   As Long, _
-'                     ByRef sBuffer As String, _
-'                     ByVal Addon   As Long, _
-'                     ByVal lenAdd  As Long _
-'                     ) Export As Long
-'
-'' Quelle: http://www.powerbasic.com/support/pbforums/showthread.php?t=35836
-''//
-''//  Fast function for concatenating many strings
-''//
-'
-'
-'    #Register None
-'
-'    Local pBuffer As Long
-'
-'    ' If the buffer is not large enough to handle the adding
-'    ' of this string then we need to expand the buffer.
-'    If stPos + lenAdd + 1 > Len(sBuffer) Then
-'       sBuffer = sBuffer & String$( Max&(lenAdd, 100 * 1024), 0)   ' increase 100K minimum
-'    End If
-'
-'    ' Copy the new string to the end of the buffer
-'    pBuffer = StrPtr(sBuffer)
-'
-'    ! cld               ; Read forwards
-'
-'    ! mov edi, pBuffer  ; Put buffer address In edi
-'    ! Add edi, stPos    ; Add starting offset To it
-'
-'    ! mov esi, Addon    ; Put String address In esi
-'    ! mov ecx, lenAdd   ; length In ecx As counter
-'
-'    ! rep movsb         ; Copy ecx count Of bytes From esi To edi
-'
-'    ! mov edx, stPos
-'    ! Add edx, lenAdd   ; Add stPos And lenAdd For Return value
-'
-'    ! mov Function, edx
-'
-'End Function
-'===========================================================================
+'==============================================================================
 
-Function FindInFile( ByVal sFile As String, ByVal sPattern As String, ByVal dwStartPos As Dword ) As  _
-   Dword
-
+Function FindInFile(ByVal sFile As String, ByVal sPattern As String, ByVal dwStartPos As Dword ) _
+   Common As Dword
+'------------------------------------------------------------------------------
+'Purpose  : Search for a string in a file
+'
+'Prereq.  : -
+'Parameter: sFile       - File to search in
+'           sPattern    - Search expression
+'           dwStartPos  - Start position
+'Returns  : Position at which the pattern found or 0 if not found
+'Note     : -
+'
+'   Author: Knuth Konrad, 28.03.2006
+'   Source: -
+'  Changed: -
+'------------------------------------------------------------------------------
    Register hFile As Long, i As Long, j As Long
-   Local dwBlockSize As Dword, dwBlocks As Dword, dwCurPos As Dword, dwFound As Dword, dwRemain As Dword
+   Local dwBlockSize, dwBlocks, dwCurPos, dwFound, dwRemain As Dword
    Local sTemp As String
    Dim asChunk(0) As String
 
-   'Datei nicht vorhanden -> raus hier
-   If Len( Dir$(sFile)) < 1 Then Exit Function
+   ' Safe guard
+   If Len( Dir$(sFile)) < 1 Then
+      Exit Function
+   End If
 
    hFile = FreeFile
-   Open sFile For Binary As #hFile
+   Open sFile For Binary Access Read Shared As #hFile
 
-   'Suchausdruck ist größer als die gesamte Datei -> raus hier
+   ' Search pattern length exceeds file size
    If Len(sPattern) > Lof(hFile) Then
       Close #hFile
       Exit Function
    End If
 
-   'Positionszeiger auf die Startposition setzen
-   If dwStartPos < 1 Then dwStartPos = 1
+   ' Move to search start
+   If dwStartPos < 1 Then
+      dwStartPos = 1
+   End If
    Seek #hFile, dwStartPos
 
-   'Chunk-Größe ermitteln
+   ' Determine chunck size
    If Lof(hFile) - dwStartPos < %SA_BLOCKSIZE Then
       dwBlockSize = Lof(hFile) - dwStartPos
    Else
       dwBlockSize = %SA_BLOCKSIZE
    End If
 
-   'Wieviele Chunks müssen wir lesen damit wir die ganze Datei haben?
+   ' # of blocks required to read the whole file?
    dwBlocks = (Lof(hFile) - dwStartPos) \ dwBlockSize
-   'Und wieviel Rest bleibt dann da noch
+   ' Reamining bytes
    dwRemain = (Lof(hFile) - dwStartPos) - (dwBlocks * dwBlockSize)
 
-   'Wir merken uns die Postion in der Datei
+   ' Remember current position
    dwCurPos = dwStartPos - 1
 
-   'Datei auslesen...
+   ' Read the file...
    For i = 1 To dwBlocks
       If UBound(asChunk) * dwBlockSize < Len(sPattern) Then
          ReDim Preserve asChunk(0 To UBound(asChunk) + 1)
       End If
-      'Block holen...
+      ' Get a chunck...
       Get$ #hFile, dwBlockSize, asChunk(UBound(asChunk))
-      'Wir merken uns die Postion in der Datei
+      ' Remember position
       dwCurPos = dwCurPos + dwBlockSize
-      'Wenn nun die Anzahl Bytes die wir gelesen haben >= der Länge des Suchstrings ist,
-      'überprüfen ob der Suchstring darin enthalten ist.
-      If UBound( asChunk ) * dwBlockSize > = Len( sPattern ) Then
-         'Temporären String zusammenbauen, den wir mit dem Suchstring vergleichen können
+      ' If the number of bytes read >= size of search string, check if search string is in there
+      If UBound(asChunk) * dwBlockSize > = Len(sPattern) Then
+         ' Assemble temp. string in which to search
          sTemp = ""
          For j = 1 To UBound( asChunk )
             sTemp = sTemp & asChunk( j )
          Next j
          dwFound = InStr( sTemp, sPattern )
-         ' Wir haben unseren Suchstring gefunden -> Position in Datei berechnen und raus hier
-         If IsTrue( dwFound ) Then
-            FindInFile = dwCurPos - Len( sTemp ) + dwFound
+         ' Search string found -> calculate file position of hit
+         If IsTrue(dwFound) Then
+            FindInFile = dwCurPos - Len(sTemp) + dwFound
             Close #hFile
             Exit Function
-         'Nichts gefunden -> 1. Array-Element rausschmeißen und den Rest nachrücken
          Else
-            Array Delete asChunk( 1 )
+         ' Nothing found -> remove 1st array element and move up the others.
+            Array Delete asChunk(1)
          End If
       End If
    Next i
 
-   'Den Rest der Datei noch dazuholen
-   If IsTrue( dwRemain ) Then
-      If UBound( asChunk ) * dwBlockSize < Len( sPattern ) Then
-         ReDim Preserve asChunk( 0 To UBound( asChunk ) + 1 )
+   ' Get the remainder of the file
+   If IsTrue(dwRemain) Then
+      If UBound(asChunk) * dwBlockSize < Len(sPattern) Then
+         ReDim Preserve asChunk(0 To UBound( asChunk) + 1)
       End If
-      'Block holen...
-      Get$ #hFile, dwRemain, asChunk( UBound( asChunk ))
-      'Wir merken uns die Postion in der Datei
+      ' Get a block...
+      Get$ #hFile, dwRemain, asChunk(UBound( asChunk))
+      ' Remember position in file
       dwCurPos = dwCurPos + dwRemain
-      'Wenn nun die Anzahl Bytes die wir gelesen haben >= der Länge des Suchstrings ist,
-      'überprüfen ob der Suchstring darin enthalten ist.
-      If UBound( asChunk ) * dwBlockSize > = Len( sPattern ) Then
-         'Temporären String zusammenbauen, den wir mit dem Suchstring vergleichen können
+      ' If the number of bytes read >= size of search string, check if search string is in there
+      If UBound(asChunk) * dwBlockSize > = Len(sPattern) Then
+         ' Assemble temp. string in which to search
          sTemp = ""
-         For j = 1 To UBound( asChunk )
-            sTemp = sTemp & asChunk( j )
+         For j = 1 To UBound(asChunk)
+            sTemp = sTemp & asChunk(j)
          Next j
-         dwFound = InStr( sTemp, sPattern )
-         'Wir haben unseren Suchstring gefunden -> Position in Datei berechnen
-         If IsTrue( dwFound ) Then
-            FindInFile = dwCurPos - Len( sTemp ) + dwFound
+         dwFound = InStr(sTemp, sPattern)
+         ' Search string found -> calculate file position of hit
+         If IsTrue(dwFound) Then
+            FindInFile = dwCurPos - Len(sTemp) + dwFound
          End If
       End If
    End If
@@ -1506,10 +1505,21 @@ Function FindInFile( ByVal sFile As String, ByVal sPattern As String, ByVal dwSt
    Close #hFile
 
 End Function
-'===========================================================================
+'==============================================================================
 
-Function DateDMY(Optional ByVal vntDelim As Variant) As String
-
+Function DateDMY(Optional ByVal vntDelim As Variant) Common As String
+'------------------------------------------------------------------------------
+'Purpose  : Return the current date as a string formatted as dd<delim>mm<delim>yyyy
+'
+'Prereq.  : -
+'Parameter: vntDelim - Date part delimiter, defaults to "-"
+'Returns  : Formatted date string
+'Note     : -
+'
+'   Author: Knuth Konrad
+'   Source: -
+'  Changed: -
+'------------------------------------------------------------------------------
    Local sDelim As String
    Local o As IPowerTime
 
@@ -1529,8 +1539,20 @@ Function DateDMY(Optional ByVal vntDelim As Variant) As String
 End Function
 '==============================================================================
 
-Function DateTimeDMY(Optional ByVal vntDelim As Variant) As String
-
+Function DateTimeDMY(Optional ByVal vntDelim As Variant) Common As String
+'------------------------------------------------------------------------------
+'Purpose  : Return the current date and time as a string formatted
+'           as dd<delim>mm<delim>yyyyThh:nn:ss.ms
+'
+'Prereq.  : -
+'Parameter: vntDelim - Date part delimiter, defaults to "-"
+'Returns  : Formatted date/time string
+'Note     : -
+'
+'   Author: Knuth Konrad
+'   Source: -
+'  Changed: -
+'------------------------------------------------------------------------------
    Local sDelim As String
    Local o As IPowerTime
 
@@ -1554,8 +1576,20 @@ Function DateTimeDMY(Optional ByVal vntDelim As Variant) As String
 End Function
 '==============================================================================
 
-Function DateYMD(Optional ByVal vntDelim As Variant) As String
-
+Function DateYMD(Optional ByVal vntDelim As Variant) Common As String
+'------------------------------------------------------------------------------
+'Purpose  : Return the current date and time as a string formatted
+'           as yyyy<delim>mm<delim>dd
+'
+'Prereq.  : -
+'Parameter: vntDelim - Date part delimiter, defaults to "-"
+'Returns  : Formatted date/time string
+'Note     : -
+'
+'   Author: Knuth Konrad
+'   Source: -
+'  Changed: -
+'------------------------------------------------------------------------------
    Local sDelim As String
    Local o As IPowerTime
 
@@ -1575,8 +1609,20 @@ Function DateYMD(Optional ByVal vntDelim As Variant) As String
 End Function
 '==============================================================================
 
-Function DateTimeYMD(Optional ByVal vntDelim As Variant) As String
-
+Function DateTimeYMD(Optional ByVal vntDelim As Variant) Common As String
+'------------------------------------------------------------------------------
+'Purpose  : Return the current date and time as a string formatted
+'           as yyyy<delim>mm<delim>ddThh:nn:ss.ms
+'
+'Prereq.  : -
+'Parameter: vntDelim - Date part delimiter, defaults to "-"
+'Returns  : Formatted date/time string
+'Note     : -
+'
+'   Author: Knuth Konrad
+'   Source: -
+'  Changed: -
+'------------------------------------------------------------------------------
    Local sDelim As String
    Local o As IPowerTime
 
@@ -1600,7 +1646,20 @@ Function DateTimeYMD(Optional ByVal vntDelim As Variant) As String
 End Function
 '==============================================================================
 
-Function DateTimeYMDinUTC(Optional ByVal vntDelim As Variant) As String
+Function DateTimeYMDinUTC(Optional ByVal vntDelim As Variant) Common As String
+'------------------------------------------------------------------------------
+'Purpose  : Return the current date and time in UTC as a string formatted
+'           as yyyy<delim>mm<delim>ddThhnnss.ms
+'
+'Prereq.  : -
+'Parameter: vntDelim - Date part delimiter, defaults to "-"
+'Returns  : Formatted date/time string
+'Note     : -
+'
+'   Author: Knuth Konrad
+'   Source: -
+'  Changed: -
+'------------------------------------------------------------------------------
 
    Local sDelim As String
    Local o As IPowerTime
@@ -1625,7 +1684,7 @@ Function DateTimeYMDinUTC(Optional ByVal vntDelim As Variant) As String
 End Function
 '==============================================================================
 
-Function FormatDate(szFormatMask As AsciiZ, Optional ByVal vntDate As Variant) As String
+Function FormatDate(szFormatMask As AsciiZ, Optional ByVal vntDate As Variant) Common As String
 '------------------------------------------------------------------------------
 'Purpose  : Returns a formatted date string
 '
@@ -1677,7 +1736,7 @@ Function FormatDate(szFormatMask As AsciiZ, Optional ByVal vntDate As Variant) A
 End Function
 '==============================================================================
 
-Function FormatTime(szFormatMask As AsciiZ, Optional ByVal vntTime As Variant) As String
+Function FormatTime(szFormatMask As AsciiZ, Optional ByVal vntTime As Variant) Common As String
 '------------------------------------------------------------------------------
 'Purpose  : Returns a formatted time string
 '
@@ -1728,7 +1787,8 @@ Function FormatTime(szFormatMask As AsciiZ, Optional ByVal vntTime As Variant) A
 End Function
 '==============================================================================
 
-Function FormatDateTime(szDateMask As AsciiZ, szTimeMask As AsciiZ, Optional ByVal vntDate As Variant, Optional ByVal vntTime As Variant) As String
+Function FormatDateTime(szDateMask As AsciiZ, szTimeMask As AsciiZ, Optional ByVal vntDate As Variant, _
+   Optional ByVal vntTime As Variant) Common As String
 '------------------------------------------------------------------------------
 'Purpose  : Returns a formatted date/time string
 '
@@ -1765,8 +1825,19 @@ Function FormatDateTime(szDateMask As AsciiZ, szTimeMask As AsciiZ, Optional ByV
 End Function
 '==============================================================================
 
-Function PBNow() As IPowerTime
-
+Function PBNow() Common As IPowerTime
+'------------------------------------------------------------------------------
+'Purpose  : Return a IPowerTime object of the current date/time
+'
+'Prereq.  : -
+'Parameter: -
+'Returns  : -
+'Note     : -
+'
+'   Author: Knuth Konrad
+'   Source: -
+'  Changed: -
+'------------------------------------------------------------------------------
    Local o As IPowerTime
 
    Let o = Class "PowerTime"
@@ -1777,50 +1848,60 @@ Function PBNow() As IPowerTime
 End Function
 '==============================================================================
 
-' Create a formatted system-message
+Function WinErrMsg (ByVal dError As Dword) Common As String
+'------------------------------------------------------------------------------
+'Purpose  : Create a formatted system-message
 '
-Function WinErrMsg (ByVal dError As Dword) As String
+'Prereq.  : -
+'Parameter: dError   - Windows error number
+'Returns  : -
+'Note     : -
+'
+'   Author: PowerBASIC Inc.
+'   Source: Part of the sample source code distribute with PBWin, PBCC
+'  Changed: -
+'------------------------------------------------------------------------------
+   Local pBuffer   As WStringZ Ptr
+   Local ncbBuffer As Dword
 
-    Local pBuffer   As WStringZ Ptr
-    Local ncbBuffer As Dword
+   ncbBuffer = FormatMessageW( _
+      %FORMAT_MESSAGE_ALLOCATE_BUFFER _
+      Or %FORMAT_MESSAGE_FROM_SYSTEM _
+      Or %FORMAT_MESSAGE_IGNORE_INSERTS, _
+      ByVal %NULL, _
+      dError, _
+      ByVal MAKELANGID(%LANG_NEUTRAL, %SUBLANG_DEFAULT), _
+      ByVal VarPtr(pBuffer), _
+      0, _
+      ByVal %NULL)
 
-    ncbBuffer = FormatMessageW( _
-                    %FORMAT_MESSAGE_ALLOCATE_BUFFER _
-                 Or %FORMAT_MESSAGE_FROM_SYSTEM _
-                 Or %FORMAT_MESSAGE_IGNORE_INSERTS, _
-                    ByVal %NULL, _
-                    dError, _
-                    ByVal MAKELANGID(%LANG_NEUTRAL, %SUBLANG_DEFAULT), _
-                    ByVal VarPtr(pBuffer), _
-                    0, _
-                    ByVal %NULL)
-
-    If ncbBuffer Then
-        Function = Peek$$(pBuffer, ncbBuffer)
-        LocalFree pBuffer
-    Else
-        Function = "Unknown error code: &H" + Hex$(dError, 8)
-    End If
+      If ncbBuffer Then
+         Function = Peek$$(pBuffer, ncbBuffer)
+         LocalFree pBuffer
+      Else
+         Function = "Unknown error code: &H" + Hex$(dError, 8)
+      End If
 
 End Function
 '==============================================================================
 
-Function FilesCount(ByVal sPath As String, Optional ByVal vntMask As Variant) As Dword
+Function FilesCount(ByVal sPath As String, Optional ByVal vntMask As Variant) Common As Dword
 '------------------------------------------------------------------------------
-'Funktion : Zählt die Anzahl der Dateien in einem Verzeichnis
+'Purpose  : Count the number of files in a folder
 '
-'Vorauss. : -
-'Parameter: sPath -  Verzeichnis das die Dateien beinhaltet
-'           sMask -  Dateimaske für Suche
-'Rückgabe : Anzahl Dateien
-'Notiz    : -
+'Prereq.  : -
+'Parameter: sPath    - Folder in ehich to count
+'           vntMask  - File name pattern of files that should be counted,
+'                      defaults to *.* (=all files)
+'Returns  : -
+'Note     : -
 '
-'    Autor: Knuth Konrad 19.08.2004
-' geändert: -
+'   Author: Knuth Konrad 19.08.2004
+'   Source: -
+'  Changed: -
 '------------------------------------------------------------------------------
    Local dwCount As Dword
    Local sSearch, sMask As String
-
    Local sTemp As String
 
    sPath = NormalizePath(sPath)
