@@ -2259,7 +2259,7 @@ Function CreateTimeStamp(Optional ByVal vntDate As Variant, Optional ByVal vntDe
 End Function
 '==============================================================================
 
-Function GetWindowsComputerName() As String
+Function GetWindowsComputerName() Common As String
 '------------------------------------------------------------------------------
 'Purpose  : Retrieve the (local) machine's name
 '
@@ -2286,7 +2286,7 @@ Function GetWindowsComputerName() As String
 End Function
 '==============================================================================
 
-Function GetWindowsUserName() As String
+Function GetWindowsUserName() Common As String
 '------------------------------------------------------------------------------
 'Purpose  : Retrieve the logged on (Windows) user's name
 '
@@ -2302,7 +2302,7 @@ Function GetWindowsUserName() As String
    Local lpszBuff As AsciiZ * 256
    Local lLen As Long, lRet As Long
 
-   'Get the Login User Name
+   ' Get the Login User Name
    lpszBuff = Space$(256)
    lLen = Len(lpszBuff)
    lRet = GetUserName(lpszBuff, lLen)
@@ -2315,7 +2315,7 @@ End Function
 '==============================================================================
 
 Sub GetFileVersion(ByVal sFile As String, ByRef lVerMajor As Long, ByRef lVerMinor As Long, _
-   ByRef lVerRevision As Long, ByRef lVerBuild As Long)
+   ByRef lVerRevision As Long, ByRef lVerBuild As Long) Common
 '------------------------------------------------------------------------------
 'Purpose  : Retrieve the version number of an executable.
 '
@@ -2359,13 +2359,13 @@ Sub GetFileVersion(ByVal sFile As String, ByRef lVerMajor As Long, ByRef lVerMin
 End Sub
 '==============================================================================
 
-Function GetFileVersionString(ByVal sFile As String) As String
+Function GetFileVersionString(ByVal sFile As String) Common As String
 '------------------------------------------------------------------------------
 'Purpose  : Retrieve the version number of an executable as a string of format
 '           <Major>.<Minor>.<Revision>.<Build>
 '
 'Prereq.  : -
-'Parameter: -
+'Parameter: sFile - Executable file to retrieve the version from
 'Returns  : -
 'Note     :
 '
@@ -2384,13 +2384,13 @@ Function GetFileVersionString(ByVal sFile As String) As String
 End Function
 '==============================================================================
 
-Function FullPathAndUNC(ByVal sPath As String) As String
+Function FullPathAndUNC(ByVal sPath As String) Common As String
 '------------------------------------------------------------------------------
 'Purpose  : Resolves/expands a path from a relative path to an absolute path
 '           and UNC path, if the drive is mapped
 '
 'Prereq.  : -
-'Parameter: -
+'Parameter: sPath - Path to resolve/expand
 'Returns  : -
 'Note     : -
 '
@@ -2415,7 +2415,7 @@ End Function
 '------------------------------------------------------------------------------
 
 Function UNCPathFromDriveLetter(ByVal sPath As String, ByRef dwError As Dword, _
-   Optional ByVal lDriveOnly As Long) As String
+   Optional ByVal lDriveOnly As Long) Common As String
 '------------------------------------------------------------------------------
 'Purpose  : Returns a fully qualified UNC path location from a (mapped network)
 '           drive letter/share
@@ -2478,7 +2478,7 @@ Function UNCPathFromDriveLetter(ByVal sPath As String, ByRef dwError As Dword, _
 End Function
 '------------------------------------------------------------------------------
 
-Function GetIPAddressv4ForHost(Optional ByVal vntHost As Variant) As String
+Function GetIPAddressv4ForHost(Optional ByVal vntHost As Variant) Common As String
 '------------------------------------------------------------------------------
 'Purpose  : Retrieve the IPv4 address for a host name.
 '
