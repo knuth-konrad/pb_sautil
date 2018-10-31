@@ -1930,7 +1930,7 @@ Function FilesCount(ByVal sPath As String, Optional ByVal vntMask As Variant) Co
 End Function
 '==============================================================================
 
-Function FileAccess(ByVal sFile As String, ByVal lAccessMode As Long) As Long
+Function FileAccess(ByVal sFile As String, ByVal lAccessMode As Long) Common As Long
 '------------------------------------------------------------------------------
 'Purpose  : Test a file for access modes
 '
@@ -1952,8 +1952,8 @@ Function FileAccess(ByVal sFile As String, ByVal lAccessMode As Long) As Long
 '------------------------------------------------------------------------------
    Local hFile As Long
 
+   ' Safe guard
    If Not FileExist(ByCopy sFile) Then
-   'Datei gar nicht vorhanden->immer Fehler
       FileAccess = %False
       Exit Function
    End If
@@ -1989,7 +1989,7 @@ Function FileAccess(ByVal sFile As String, ByVal lAccessMode As Long) As Long
 End Function
 '==============================================================================
 
-Function baGetFileSize(ByRef sFileName As String) As Quad
+Function baGetFileSize(ByRef sFileName As String) Common As Quad
 '------------------------------------------------------------------------------
 'Purpose  : Return a file's size
 '
@@ -2017,12 +2017,48 @@ Function baGetFileSize(ByRef sFileName As String) As Quad
    End If
 
 End Function
-'---------------------------------------------------------------------------
+'==============================================================================
+
+Function baGetAllFileSize(ByVal sPath As String, Optional ByVal vntFilePattern As Variant) _
+   Common As Quad
+'------------------------------------------------------------------------------
+'Purpose  : Return the file size of all files in a folder
+'
+'Prereq.  : -
+'Parameter: sPath          - Sum file size in this folder
+'           vntFilePattern - File name pattern, defaults to "*.*"
+'Returns  : File size in bytes
+'Note     : -
+'
+'   Author: Knuth Konrad, 31.10.2018
+'   Source: -
+'  Changed: -
+'------------------------------------------------------------------------------
+   Local qudSize As Quad
+   Local sPattern, sFile As String
+
+   If IsMissing(vntFilePattern) Then
+      sPattern = "*.*"
+   Else
+      sPattern = Variant$(vntFilePattern)
+   End If
+
+   sFile = Dir$(NormalizePath(sPath) & sPattern)
+
+   Do While Len(sFile) > 0
+      qudSize += baGetFileSize(NormalizePath(sPath) & sFile)
+      sFile = Dir$()
+   Loop
+
+   Function = qudSize
+
+End Function
+'==============================================================================
 
 Function Delete2RecycleBin(ByVal sFile As String, _
    Optional ByVal lShowProgress As Long, Optional ByVal lConfirmation As Long, _
    Optional ByVal lSimple As Long, Optional ByVal lSysErrors As Long, _
-   Optional ByVal hWndParent As Long) As Long
+   Optional ByVal hWndParent As Long) Common As Long
 '------------------------------------------------------------------------------
 'Purpose  : Delete a file to the recycle bin
 '
@@ -2039,7 +2075,10 @@ Function Delete2RecycleBin(ByVal sFile As String, _
    Local udt As SHFILEOPSTRUCT
 
    ' File name(s) must be terminated with two NUL
-   sFile = sFile & $Nul & $Nul
+   If Right$(sFile, 2) <> ($Nul & $Nul) Then
+      sFile = sFile & $Nul & $Nul
+   End If
+
    udt.pFrom = StrPtr(sFile)
 
    ' In order to delete to the rec bin, this MUST be true
@@ -2069,27 +2108,30 @@ Function Delete2RecycleBin(ByVal sFile As String, _
 End Function
 '==============================================================================
 
-' 'API Konstanten für ShellAndWaitApi
-'Private Const NORMAL_PRIORITY_CLASS As Long = &H20
-'Private Const INFINITE As Long = -1
-'Private Const STARTF_USESHOWWINDOW  As Long = &H1
-
-Function ShellAndWaitApi(ByVal szExec As AsciiZ * %Max_Path) As Long
+Function ShellAndWaitApi(ByVal szExec As AsciiZ * %Max_Path) Common As Long
 '------------------------------------------------------------------------------
-'Funktion : Startet externes Programm und wartet auf Beendigung
+'Purpose  : Start an external program (process) and wait for it to end/exit
 '
-'Vorauss. : -
-'Parameter: -
-'Rückgabe : -
-'Notiz    : -
+'Prereq.  : -
+'Parameter: szExec   - External program
+'Returns  : True if wait state has been triggered, false for anything else
+'Note     : -
 '
-'    Autor: MS
-'   Quelle: http://support.microsoft.com/kb/129797
-' geändert: -
+'   Author: Microsoft
+'   Source: http://support.microsoft.com/kb/129797
+'  Changed: -
 '------------------------------------------------------------------------------
    Local udtProc As PROCESS_INFORMATION
    Local udtStart As STARTUPINFO
    Local lRet As Long
+
+   ' 'API constants for ShellAndWaitApi
+   'Private Const NORMAL_PRIORITY_CLASS As Long = &H20
+   'Private Const INFINITE As Long = -1
+   'Private Const STARTF_USESHOWWINDOW  As Long = &H1
+
+   ' Return value for WaitForSingleObject
+   ' %WAIT_OBJECT_0
 
    ' Window styles
    '%SW_HIDE             = 0
@@ -2123,13 +2165,18 @@ Function ShellAndWaitApi(ByVal szExec As AsciiZ * %Max_Path) As Long
    Call CloseHandle(udtProc.hThread)
    Call CloseHandle(udtProc.hProcess)
 
-   ShellAndWaitApi = lRet
+   If lRet = %WAIT_OBJECT_0 Then
+      Function = %True
+   Else
+      Function = %False
+   End If
 
 End Function
 '==============================================================================
 
 Function CreateTimeStamp(Optional ByVal vntDate As Variant, Optional ByVal vntDelim As Variant, _
-   Optional ByVal vntDateOnly As Variant, Optional ByVal vntFormat As Variant) As String
+   Optional ByVal vntDateOnly As Variant, Optional ByVal vntFormat As Variant) _
+   Common As String
 '------------------------------------------------------------------------------
 'Purpose  : Creates a (date)(time) stamp string of format YYYYMMDDHHNNSS
 '

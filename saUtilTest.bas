@@ -79,6 +79,33 @@ Function PBMain () As Long
    BlankLine
 
 
+   ' Function FilesCount(ByVal sPath As String, Optional ByVal vntMask As Variant) Common As Dword
+   Con.StdOut "-- FilesCount"
+   Con.StdOut Format$(FilesCount("C:\Windows", "*.dll"))
+
+   BlankLine
+
+
+   ' Function baGetFileSize(ByRef sFileName As String) Common As Quad
+   ' Function baGetAllFileSize(ByVal sPath As String, Optional ByVal vntFilePattern As Variant) Common As Quad
+   Con.StdOut "-- baGetFileSize / baGetAllFileSize"
+   Con.StdOut FormatNumberEx(baGetFileSize("C:\DATA\PB\INCLUDE\INCKGK\saUtil\DATA\sabb62.tmp"), %True)
+   Con.StdOut FormatNumberEx(baGetAllFileSize("C:\Windows", "*.dll"), %True)
+
+   BlankLine
+
+
+'   Function Delete2RecycleBin(ByVal sFile As String, _
+'      Optional ByVal lShowProgress As Long, Optional ByVal lConfirmation As Long, _
+'      Optional ByVal lSimple As Long, Optional ByVal lSysErrors As Long, _
+'      Optional ByVal hWndParent As Long) Common As Long
+   Con.StdOut "-- Delete2RecycleBin"
+   Con.StdOut Format$(Delete2RecycleBin("C:\DATA\PB\INCLUDE\INCKGK\saUtil\DATA\sabb62.tmp", _
+      %True, _
+      %True))
+
+   BlankLine
+
 
    Trace Off
    Trace Close
