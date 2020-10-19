@@ -105,6 +105,34 @@ Function GetEXEPath() Common As String
 End Function
 '==============================================================================
 
+Function GetEnvironPath(ByVal sPath As String) Common As String
+'------------------------------------------------------------------------------
+'Purpose  : Use Win API ExpandEnvironmentStrings to resolve variables in pased folder
+'
+'Prereq.  : -
+'Parameter: sPath - Folder passed via CLI parameter /p
+'Returns  : String with replaced environemnt variable
+'Note     : -
+'
+'   Author: Knuth Konrad
+'   Source: -
+'  Changed: -
+'------------------------------------------------------------------------------
+   Local szIn, szOut As AsciiZ * %Max_Path
+   Dim lRet As Long
+
+   szIn = sPath
+   lRet = ExpandEnvironmentStringsA(szIn, szOut, SizeOf(szOut))
+
+   If lRet > 0 Then
+      GetEnvironPath = Left$(szOut, lRet)
+   Else
+      GetEnvironPath = sPath
+   End If
+
+End Function
+'------------------------------------------------------------------------------
+
 Function AppPath() Common As String
 '------------------------------------------------------------------------------
 'Purpose  : Returns the path to the executable, similar to VB's App.Path()
@@ -489,6 +517,66 @@ Function ShortenPath(ByVal sLongPath As String, ByVal lLenght As Long) Common As
 
    ShortenPath = Left$(sTemp,(Len(sTemp) - (lLen + 3)) / 2) & "..." & Right$(sTemp,(Len(sTemp) _
       - (lLen + 3)) / 2) & sFilename
+
+End Function
+'==============================================================================
+
+Function ShortenPathText(ByVal sPath As String, ByVal lMaxLen As Long) Common As String
+'------------------------------------------------------------------------------
+'Funktion : Kürzt eine Pfadangabe auf lMaxLen Zeichen
+'
+'Vorauss. : -
+'Parameter: sPath    -  zu kürzende Pfadangabe
+'           lMaxLen  -  maximal Länge des Pfades
+'Rückgabe : -
+'
+'Autor    : Doberenz & Kowalski
+'erstellt : 26.11.1999
+'geändert : Knuth Konrad
+'           ungarische Notation und Stringfunktion statt Variant (Mid, Left...)
+'Notiz    : Quelle: Visual Basic 6 Kochbuch, Hanser Verlag
+'------------------------------------------------------------------------------
+   Local i, lLen, lDiff As Long
+   Local sTemp As String
+
+   lLen = Len(sPath)
+
+   ShortenPathText = sPath
+
+   If Len(sPath) < = lMaxLen Then
+      Exit Function
+   End If
+
+   For i = (lLen - lMaxLen + 6) To lLen
+      If Mid$(sPath, i, 1) = "\" Then Exit For
+   Next i
+
+   If InStr(sPath, "\") < 1 Then
+   ' Ist wohl nur eine Datei, ohne Pfadangabe -> die "Mitte" des Namens kürzen
+
+      sTemp = sPath
+
+      If lLen > lMaxLen Then
+         lDiff = lLen - lMaxLen
+      Else
+         lDiff = 0
+      End If
+
+      lDiff = lDiff \ 2
+
+      If lDiff > 2 Then
+         sTemp = Left$(sPath, lLen \ 2) & "..." & Right$(sPath, lLen \ 2)
+      End If
+
+   Else
+      If i < lLen Then
+         sTemp = Left$(sPath, 3) & "..." & Right$(sPath, lLen - (i - 1))
+      Else
+         sTemp = Left$(sPath, 3) & "..." & Right$(sPath, lMaxLen - 6)
+      End If
+   End If
+
+   ShortenPathText = sTemp
 
 End Function
 '==============================================================================
@@ -1016,7 +1104,7 @@ End Function
 Function BackupFile(ByVal sFileSource As String, ByRef sFileDest As String, _
    Optional ByVal bolCopyOnly As Long, Optional vntIncrementTarget As Variant) Common As Long
 '------------------------------------------------------------------------------
-'Purpose  : Creates a backup of a file by copying or moving it from folder <b> to
+'Purpose  : Creates a backup of a file by copying or moving it from folder <a> to
 '           folder <b>
 '
 'Prereq.  : -
@@ -2577,64 +2665,3 @@ End With
 
 End Function
 #EndIf
-
-
-Function ShortenPathText(ByVal sPath As String, ByVal lMaxLen As Long) As String
-'------------------------------------------------------------------------------
-'Funktion : Kürzt eine Pfadangabe auf lMaxLen Zeichen
-'
-'Vorauss. : -
-'Parameter: sPath    -  zu kürzende Pfadangabe
-'           lMaxLen  -  maximal Länge des Pfades
-'Rückgabe : -
-'
-'Autor    : Doberenz & Kowalski
-'erstellt : 26.11.1999
-'geändert : Knuth Konrad
-'           ungarische Notation und Stringfunktion statt Variant (Mid, Left...)
-'Notiz    : Quelle: Visual Basic 6 Kochbuch, Hanser Verlag
-'------------------------------------------------------------------------------
-   Local i, lLen, lDiff As Long
-   Local sTemp As String
-
-   lLen = Len(sPath)
-
-   ShortenPathText = sPath
-
-   If Len(sPath) < = lMaxLen Then
-      Exit Function
-   End If
-
-   For i = (lLen - lMaxLen + 6) To lLen
-      If Mid$(sPath, i, 1) = "\" Then Exit For
-   Next i
-
-   If InStr(sPath, "\") < 1 Then
-   ' Ist wohl nur eine Datei, ohne Pfadangabe -> die "Mitte" des Namens kürzen
-
-      sTemp = sPath
-
-      If lLen > lMaxLen Then
-         lDiff = lLen - lMaxLen
-      Else
-         lDiff = 0
-      End If
-
-      lDiff = lDiff \ 2
-
-      If lDiff > 2 Then
-         sTemp = Left$(sPath, lLen \ 2) & "..." & Right$(sPath, lLen \ 2)
-      End If
-
-   Else
-      If i < lLen Then
-         sTemp = Left$(sPath, 3) & "..." & Right$(sPath, lLen - (i - 1))
-      Else
-         sTemp = Left$(sPath, 3) & "..." & Right$(sPath, lMaxLen - 6)
-      End If
-   End If
-
-   ShortenPathText = sTemp
-
-End Function
-'==============================================================================
